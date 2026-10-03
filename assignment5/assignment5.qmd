@@ -1,0 +1,226 @@
+---
+title: "Assignment5"
+format: html
+editor: visual
+---
+
+```{r setup}
+#| message: false
+#| warning: false
+  
+# packages
+library(tidyverse) # Graphs with ggplot()
+library(knitr) # Tables with kable()
+library(brms) # Hierarchical Bayesian models
+library(rstan) # Interface to Stan
+library(bayesplot) # Model output graphs
+
+set.seed(359)
+```
+
+We focus on the effect of cognitive load on pupil size, looking at all the subjects:
+
+```{r}
+#| message: false
+#| warning: false
+
+load("df_pupil_complete.rda")
+```
+
+## Exercise 1
+
+Try to fit a “maximal” model (correlated varying intercept and slopes for subjects) assuming a normal likelihood, and using these priors:
+
+```{r}
+prior1 = c(
+  prior(normal(1000, 500), class = Intercept),
+  prior(normal(0, 1000), class = sigma),
+  prior(normal(0, 100), class = b, coef = c_load),
+  prior(normal(0, 1000), class = sd),
+  prior(lkj(2), class = cor))
+# class = cor measures the covariance between pupil size and load
+
+df_pupil_complete <- df_pupil_complete %>%
+  mutate(c_load = load - mean(load))
+```
+
+Examine the effect of (centered) load on pupil size, and the average pupil size. What do you conclude?
+
+```{r}
+# only individual-level random effects
+file_path <- "brms_model1.rds"
+if (file.exists(file_path)) {
+  model1 <- readRDS(file_path)
+} else {
+  set.seed(359)
+  model1 <- brm(p_size ~ 1 + c_load + (c_load | subj),
+                # varying intercept is automatically included
+                data = df_pupil_complete, 
+                prior = prior1, iter = 2000, warmup = 500, cores = 4)
+  saveRDS(model1, file = file_path)
+}
+model1
+```
+
+The effect of cognitive load on pupil size is not clear, CI: \[-8.59, 88.76\].
+
+The model could also be analyzed using cross-level models, that is, two-way random effects (individual-level and trial-level)
+
+```{r}
+file_path <- "brms_model2.rds"
+if (file.exists(file_path)) {
+  model2 <- readRDS(file_path)
+} else {
+  set.seed(359)
+  model2 <- brm(p_size ~ 
+                  1 + c_load + (c_load | subj) + (c_load | trial),
+                # varying intercept is automatically included
+                data = df_pupil_complete, 
+                prior = prior1, iter = 2000, warmup = 500, cores = 4)
+  saveRDS(model2, file = file_path)
+}
+model2
+```
+
+Calculate ICC:
+
+Between subject variance: $\sigma^2_{subj} = 3316.77^2 = 11000963$.
+
+Between trial variance: $\sigma^2_{trial} = 96.34^2 = 9281.396$.
+
+Residuals: $\sigma^2_{e} = 495.38^2 = 245401.3$.
+
+ICC of subjects: $ICC\_{subj} = 11000963 / (11000963 + 9281.396 + 245401.3) \approx 0.98$.
+
+ICC of trials: $ICC\_{trial} = 9281.396 / (11000963 + 9281.396 + 245401.3) \approx 0.001$.
+
+There is almost no interclass correlation of trials, so no need to include random effect of trails.
+
+## Exercise 2
+
+Do a sensitivity analysis for the prior on the intercept (α). What is the estimate of the effect (β) under different priors?
+
+```{r}
+# sensitivity analysis 1
+prior3 = c(
+  prior(normal(2000, 500), class = Intercept),
+  prior(normal(0, 1000), class = sigma),
+  prior(normal(0, 100), class = b, coef = c_load),
+  prior(normal(0, 1000), class = sd),
+  prior(lkj(2), class = cor))
+
+file_path <- "brms_model3.rds"
+if (file.exists(file_path)) {
+  model3 <- readRDS(file_path)
+} else {
+  set.seed(359)
+  model3 <- brm(p_size ~ 1 + c_load + (c_load | subj),
+                # varying intercept is automatically included
+                data = df_pupil_complete, 
+                prior = prior3, iter = 2000, warmup = 500, cores = 4)
+  saveRDS(model3, file = file_path)
+}
+model3
+
+# sensitivity analysis 2
+prior4 = c(
+  prior(normal(3000, 500), class = Intercept),
+  prior(normal(0, 1000), class = sigma),
+  prior(normal(0, 100), class = b, coef = c_load),
+  prior(normal(0, 1000), class = sd),
+  prior(lkj(2), class = cor))
+
+file_path <- "brms_model4.rds"
+if (file.exists(file_path)) {
+  model4 <- readRDS(file_path)
+} else {
+  set.seed(359)
+  model4 <- brm(p_size ~ 1 + c_load + (c_load | subj),
+                # varying intercept is automatically included
+                data = df_pupil_complete, 
+                prior = prior4, iter = 2000, warmup = 500, cores = 4)
+  saveRDS(model4, file = file_path)
+}
+model4
+
+# sensitivity analysis 3
+prior5 = c(
+  prior(normal(3000, 1000), class = Intercept),
+  prior(normal(0, 1000), class = sigma),
+  prior(normal(0, 100), class = b, coef = c_load),
+  prior(normal(0, 1000), class = sd),
+  prior(lkj(2), class = cor))
+
+file_path <- "brms_model5.rds"
+if (file.exists(file_path)) {
+  model5 <- readRDS(file_path)
+} else {
+  set.seed(359)
+  model5 <- brm(p_size ~ 1 + c_load + (c_load | subj),
+                # varying intercept is automatically included
+                data = df_pupil_complete, 
+                prior = prior5, iter = 2000, warmup = 500, cores = 4)
+  saveRDS(model5, file = file_path)
+}
+model5
+```
+
+Estimation is pretty sensitive to the priors of intercept. Nevertheless, new estimations indicate a clear effect of cognitive load, CI: \[0.52, 85.88\], CI: \[11.11, 86.48\], and CI: \[22.26, 87.79\].
+
+## Exercise 3
+
+Is the effect of load consistent across subjects? Investigate this visually.
+
+```{r}
+# extract the overall group level effect:
+beta <- c(as_draws_df(model5)$b_c_load)
+
+# extract the individual adjustments
+ind_effects_v <- paste0("r_subj[", 
+                        unique(df_pupil_complete$subj), ",c_load]")
+adjustment <- as.matrix(as_draws_df(model5)[ind_effects_v])
+
+# get the by subject effects in a data frame
+by_subj_effect <- as_tibble(beta + adjustment)
+par_h <- lapply(by_subj_effect, function(x) {
+  tibble(
+    Estimate = mean(x),
+    Q2.5 = quantile(x, .025),
+    Q97.5 = quantile(x, .975)
+  )
+}) %>%
+  bind_rows() %>%
+  # add a column of model id and one with subject labels:
+  mutate(
+    subj = unique(df_pupil_complete$subj))%>%
+  arrange(Estimate) %>%
+  mutate(subj = factor(subj, levels = subj))
+
+ggplot(
+  par_h,
+  aes(
+    ymin = Q2.5, ymax = Q97.5, x = subj, y = Estimate
+  )
+) +
+  geom_errorbar() +
+  geom_point() +
+  geom_hline(
+    yintercept =
+      posterior_summary(model5)["b_c_load", "Estimate"]
+  ) +
+  geom_hline(
+    yintercept =
+      posterior_summary(model5)["b_c_load", "Q2.5"],
+    linetype = "dotted", linewidth = 0.5
+  ) +
+  geom_hline(
+    yintercept =
+      posterior_summary(model5)["b_c_load", "Q97.5"],
+    linetype = "dotted", linewidth = 0.5
+  ) +
+  xlab("Change in pupil size") +
+  coord_flip()
+
+```
+
+Interpretation: SD(c_load) from the estimation already implies that the effect of load is not consistent across subjects. Inspection of the figure further indicates that the overall effect is driven by less than half of participants.
