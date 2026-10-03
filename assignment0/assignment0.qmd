@@ -1,0 +1,157 @@
+---
+title: "Assignment0"
+format: html
+editor: visual
+---
+
+## Exercise 1
+
+Given a binomial random variable X, with probability of success θ = 0.6, compute, for 10 trials (this is specified in R with size = 10):
+
+• Prob(X ≤ 6)
+
+```{r}
+pbinom(6, size = 10, prob = 0.6)
+```
+
+• Prob(X ≥ 4)
+
+```{r}
+pbinom(3, size = 10, prob = 0.6, lower.tail = FALSE)
+
+# cross check
+1 - pbinom(3, size = 10, prob = 0.6)
+```
+
+• Prob(7 ≤ X ≤ 9)
+
+```{r}
+sum(dbinom(7:9, size = 10, prob = 0.6))
+
+# cross check
+pbinom(9, size = 10, prob = 0.6) - pbinom(6, size = 10, prob = 0.6)
+```
+
+## Exercise 2
+
+Given a binomial random variable X, with probability of success θ = 0.5, what is the quantile k such that Prob(X ≤ k) = 0.5. The number of trials is 10.
+
+```{r}
+qbinom(p = 0.5, size = 10, prob = 0.5)
+```
+
+## Exercise 3
+
+Run an experiment with 10 trials from a binomial (probability of success 0.6) for 1000 times. Save the 1000 instances as an R object (say, successes).
+
+```{r}
+successes <- rbinom(n = 1000, size = 10, prob = 0.6)
+```
+
+Compute the variance of the successes vector (use the command var()).
+
+```{r}
+var(successes)
+```
+
+Compute the variance of the number of successes analytically using the formula nθ(1 − θ) shown in the slides. Confirm that the two estimates (the one based on simulation and the one based on the analytical calculation) approximately match.
+
+```{r}
+10 * 0.6 * (1 - 0.6)
+```
+
+Plot the distribution of the number of successes for the 1000 experiments.
+
+```{r}
+hist(successes)
+```
+
+## Exercise 4
+
+Given a normal random variable X with mean 500 and variance $50^2$, compute:
+
+• Prob(X \> 550)
+
+```{r}
+pnorm(550, mean = 500, sd = 50, lower.tail = FALSE)
+
+# cross check
+1 - pnorm(550, mean = 500, sd = 50)
+```
+
+• Prob(X \< 450)
+
+```{r}
+pnorm(450, mean = 500, sd = 50)
+```
+
+• Prob(450 \< X \< 550)
+
+```{r}
+pnorm(550, mean = 500, sd = 50) - pnorm(450, mean = 500, sd = 50)
+```
+
+• Prob(450 ≤ X ≤ 550)
+
+```{r}
+pnorm(550, mean = 500, sd = 50) - pnorm(450, mean = 500, sd = 50)
+```
+
+## Exercise 5
+
+Given a normal random variable X with mean 500 and variance $50^2$:
+
+• what is the quantile q such that Prob(X \< q) = 0.80?
+
+```{r}
+qnorm(p = 0.8, mean = 500, sd = 50)
+```
+
+• what is the quantile q such that Prob(X \> q) = 0.30?
+
+```{r}
+# Prob(X > q) = 0.30 is equivalent to Prob(X < q) = 0.70
+
+qnorm(p = 0.7, mean = 500, sd = 50)
+```
+
+• what are the two quantiles q1 and q2 such that they are equidistant from the mean 500 and Prob(q1 \< X \< q2) = 0.95?
+
+```{r}
+# Prob(q1 < X < q2) = 0.95 is equivalent to Prob(q1 < X) = 0.025 and Prob(q2 > X) = 0.025, with the latter equivalent to Prob(q2 < X) = 0.975
+
+qnorm(p = 0.025, mean = 500, sd = 50)
+qnorm(p = 0.975, mean = 500, sd = 50)
+```
+
+## Exercise 6
+
+Generate 100 data points from a normal distribution with mean 500 and variance $50^2$ for 1000 times. Each time, compute the mean of the 100 data points and save it in an object.
+
+```{r}
+means <- rep(NA, 1000)
+for(i in 1:1000){
+  means[i] <- mean(rnorm(100, mean=500, sd=50))
+}
+```
+
+Confirm that the mean of the vector of means is close to 500.
+
+```{r}
+mean(means)
+```
+
+Confirm that the standard deviation of the vector of means is approximately the analytically computed standard error $\frac{50}{\sqrt{100}}$
+
+```{r}
+sd(means)
+
+# analytical SE
+50 / sqrt(100)
+```
+
+Plot the distribution of the means.
+
+```{r}
+hist(means)
+```
