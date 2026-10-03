@@ -1,0 +1,178 @@
+---
+title: "Assignment2"
+format: html
+editor: visual
+---
+
+```{r setup}
+#| message: false
+#| warning: false
+  
+# libraries
+library(ggplot2)
+library(brms)
+library(dplyr)
+library(bayesplot)
+
+load("income.RData")
+```
+
+## Exercise
+
+Fit the following Bayesian model to assess the effect of household income on life satisfaction.
+
+```{r}
+# Case-wise exclusion of missing data
+income <- na.exclude(income)
+
+# This function can be used to figure out the structure of the
+# priors for the specific model including names of the predictors
+# default_prior(ls ~ inc_hh, data = income)
+bprior1 <- c(brms::prior(normal(3, 2), class = Intercept), 
+             # intercept is estimated for the mean income
+             brms::prior(normal(0, 1), class = b, coef = inc_hh),
+             brms::prior(normal(0, 2.5), class = sigma))
+
+file_path <- "brms_lsm1.rds"
+if (file.exists(file_path)) {
+  model1 <- readRDS(file_path)
+} else {
+  set.seed(359)
+  model1 <- brm(ls ~ 1 + inc_hh, data = income,
+                prior = bprior1, silent = 2, refresh = 0)
+  saveRDS(model1, file = file_path)
+}
+model1
+```
+
+\(a\) Consider the priors. Do you think they are a good choice? Run a prior prediction and change the priors if necessary.
+
+Answer: The life satisfaction (ls) values are between 1 and 5, so effects cannot be larger than one step on the life satisfaction scale. The mean is probably around 3. Sigma, the noise standard deviation can also not be bigger than 2-3 because of the range restriction of the data.
+
+```{r}
+dat <- data.frame(ls = rep(1, 828), 
+                  inc_hh = sample(1:12, size = 828, replace = TRUE), 
+                  trial = 1:828)
+# for prior prediction, the dependent variable doesn't matter, it can be anything, so ls = rep(1, 828) is okay
+# but for the independent variable, the model needs to know its range, so it cannot be inc_hh = rep(1, 828); it should be between 1 and 12
+
+file_path <- "brms_lsprior.rds"
+if (file.exists(file_path)) {
+  model.prior <- readRDS(file_path)
+} else {
+  set.seed(359)
+  model.prior <- brms::brm(ls ~ 1 + inc_hh, data = dat, prior = bprior1, 
+                           sample_prior = "only", iter = 4000, cores = 4)
+  saveRDS(model.prior, file = file_path)
+}
+model.prior
+
+prior.predictions <- posterior_predict(model.prior)
+
+bayesplot::ppc_dens_overlay(prior.predictions[1,], 
+                            prior.predictions[1:500,], trim = T) +
+  theme_light(base_size = 16)
+
+# visualize priors
+prior.pred.means <- colMeans(t(prior.predictions))
+prior.pred.sd <- apply(t(prior.predictions), 2, sd)
+
+hist(prior.pred.means)
+hist(prior.pred.sd)
+```
+
+Answer: Life satisfaction is on a scale from 1 to 5, so the range should be smaller. (You can also try to limit the distribution, but that would be super complicated, so why not just make the SD smaller.)
+
+\(b\) Fit the model with the adjusted priors. Ensure convergence and visualize the posterior distributions of all parameters. Interpret the results.
+
+```{r}
+cprior <- c(brms::prior(normal(3, 1), class = Intercept), 
+            # sd of intercept is smaller
+            brms::prior(normal(0, .5), class = b, coef = inc_hh), 
+            # sd of coefficient is also smaller
+            brms::prior(normal(0, 1), class = sigma))
+            # sd of sigma is smaller as well
+
+file_path <- "brms_lsad.rds"
+if (file.exists(file_path)) {
+  model.ad <- readRDS(file_path)
+} else {
+  set.seed(359)
+  model.ad <- brms::brm(ls ~ 1 + inc_hh, data = income, prior = cprior,
+                        iter = 4000, cores = 4)
+  saveRDS(model.ad, file = file_path)
+}
+model.ad
+plot(model.ad)
+```
+
+Model diagnostic: Convergence is good. Rhat and ESS are in the range. The caterpillars are hairy.
+
+Interpretation: None of the posterior credible intervals includes 0. For an increase of 10.000 Euros of household income there is an increase of life satisfaction of about 0.07 points.
+
+\(c\) Conduct a sensitivity analysis by fitting the model using three different priors.
+
+```{r}
+# prior set 2
+cprior2 <- c(brms::prior(normal(3, 1), class = Intercept),
+             brms::prior(normal(-1, 0.5), class = b, coef = inc_hh),
+             brms::prior(normal(0, 1), class = sigma))
+
+file_path <- "brms_lsm2.rds"
+if (file.exists(file_path)) {
+  model2 <- readRDS(file_path)
+} else {
+  set.seed(359)
+  model2 <- brm(ls ~ 1 + inc_hh, data = income,
+                prior = cprior2, silent = 2, refresh = 0)
+  saveRDS(model2, file = file_path)
+}
+model2
+plot(model2)
+
+# prior set 3
+cprior3 <- c(brms::prior(normal(3, 1), class = Intercept),
+             brms::prior(normal(1, 0.5), class = b, coef = inc_hh),
+             brms::prior(normal(0, 1), class = sigma))
+
+file_path <- "brms_lsm3.rds"
+if (file.exists(file_path)) {
+  model3 <- readRDS(file_path)
+} else {
+  set.seed(359)
+  model3 <- brm(ls ~ 1 + inc_hh, data = income,
+                prior = cprior3, silent = 2, refresh = 0)
+  saveRDS(model3, file = file_path)
+}
+model3
+plot(model3)
+
+# prior set 4
+cprior4 <- c(brms::prior(normal(3, 1), class = Intercept),
+             brms::prior(normal(0, 1), class = b, coef = inc_hh),
+             brms::prior(normal(0, 0.5), class = sigma))
+
+file_path <- "brms_lsm4.rds"
+if (file.exists(file_path)) {
+  model4 <- readRDS(file_path)
+} else {
+  set.seed(359)
+  model4 <- brm(ls ~ 1 + inc_hh, data = income,
+                prior = cprior4, silent = 2, refresh = 0)
+  saveRDS(model4, file = file_path)
+}
+model4
+plot(model4)
+```
+
+Interpret: The results seem quite robust against different priors.
+
+\(d\) Run a posterior prediction. Visualize the results.
+
+```{r}
+posterior.predictions <- posterior_predict(model.ad)
+
+bayesplot::ppc_dens_overlay(income$ls,
+                            posterior.predictions[1:500,]) +
+  theme_light(base_size = 16)
+```
