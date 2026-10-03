@@ -1,0 +1,172 @@
+---
+title: "Assignment6"
+format: html
+editor: visual
+---
+
+```{r setup}
+#| message: false
+#| warning: false
+  
+# packages
+library(tidyverse) # Graphs with ggplot()
+library(knitr) # Tables with kable()
+library(brms) # Hierarchical Bayesian models
+library(rstan) # Interface to Stan
+library(bayesplot) # Model output graphs
+
+set.seed(359)
+```
+
+A subset of the dataset form the 2024 World Happiness Report, which includes the countries for which 15 data points or more were available. The report presents the results of a yearly survey of people’s happiness in different parts of the world. The initiative is a collaboration of Gallup, the Oxford Well-being Research Center, the UN Sustainable Development Solutions Network, and the WHR’s Editorial Board.
+
+In general, the initiative seeks to highlight happiness as a central indicator of societal progress; that it can be measured; and that its measurement can form an empirical basis for interventions to promote happiness.
+
+In each survey round, around 1000 people from each country are asked several questions related to happiness. In one question they are asked to imagine a ladder with steps from 0 to 10, and to rate their overall life happiness on it, with higher steps representing higher happiness (“Cantril ladder”, corresponding to the variable Life.Ladder in the dataset). Further questions refer to positive and negative emotions experienced the past day; and to possible causes of happiness like GDP, social support, freedom to make life choices, and perceived corruption. Below you see the first rows of the dataset.
+
+```{r}
+#| message: false
+#| warning: false
+
+d <- read.csv("countries_n15over.csv")
+```
+
+## Exercise 1
+
+Choose 5 countries from a given continent, and create a new, smaller dataset with only the data from those countries (you can use the subset() function for this).
+
+```{r}
+asia <- d %>%
+  subset(Country.name == "China" | Country.name == "India" |
+           Country.name == "Pakistan" | Country.name == "Indonesia" |
+           Country.name == "Vietnam")
+
+europe <- d %>%
+  subset(Country.name == "Portugal" | Country.name == "Italy" |
+           Country.name == "Greece" | Country.name == "France" |
+           Country.name == "Latvia")
+```
+
+## Exercise 2
+
+Formulate a hypothesis to test with your dataset. The hypothesis should be testable using Life.Ladder as criterion and one or more of the other variables as predictors.
+
+Hypothesis: (a) social support and (b) GDP per capita positively predict Life.Ladder.
+
+## Exercise 3
+
+Illustrate the pattern in the data that is relevant to the hypothesis with a graph. Design the graph in such a way, that (a) two (or more) levels of aggregation are visible, and (b) not only information about means, but also information about the variance around those means is visible, (c) the figure axes have comprehensible labels.
+
+```{r}
+#| message: false
+#| warning: false
+
+# social support
+ggplot(asia, aes(x = Social.support, y = Life.Ladder, 
+              color = factor(Country.name), 
+              fill = factor(Country.name)))+
+  geom_point()+
+  geom_smooth(method = "lm") +
+  theme_bw()+
+  labs(x = "Social support", y = "Happiness", 
+       color = "Country", fill = "Country")
+
+# GDP
+ggplot(asia, aes(x = Log.GDP.per.capita, y = Life.Ladder, 
+                 color = factor(Country.name), 
+                 fill = factor(Country.name)))+
+  geom_point()+
+  geom_smooth(method = "lm") +
+  theme_bw()+
+  labs(x = "GDP per capita", y = "Happiness", 
+       color = "Country", fill = "Country")
+```
+
+It seems that there is no strong reason to include random effects for the slope of social support. However, there is very strong evidence for GDP.
+
+## Exercise 4
+
+Specify and test a multilevel model to test your hypothesis. Let your model contain at least two levels of aggregation, and include parameters to assess not only means (“fixed effects”) but also variability around those means (“random effects”). Test it both by computing posterior parameter values, and by comparing alternative models (with vs. without a parameter of interest) using Bayes factors.
+
+```{r}
+#| message: false
+#| warning: false
+
+# null model
+file_path <- "brms_model0.rds"
+if (file.exists(file_path)) {
+  model0 <- readRDS(file_path)
+} else {
+  model0 <- brm(Life.Ladder ~ (1 | Country.name),
+                data = asia, 
+                iter = 2000, warmup = 500, cores = 4,
+                save_pars = save_pars(all = TRUE))
+  saveRDS(model0, file = file_path)
+}
+model0
+
+# social support only
+prior1 = c(prior(normal(5, 1), class = b, coef = Social.support))
+
+file_path <- "brms_model1.rds"
+if (file.exists(file_path)) {
+  model1 <- readRDS(file_path)
+} else {
+  model1 <- brm(Life.Ladder ~ (1 | Country.name) + Social.support,
+                data = asia, 
+                prior = prior1, iter = 2000, warmup = 500, cores = 4,
+                save_pars = save_pars(all = TRUE))
+  saveRDS(model1, file = file_path)
+}
+model1
+
+# GDP only
+prior2 = c(prior(normal(0.5, 1), class = b, coef = Log.GDP.per.capita),
+           prior(normal(1, 1), class = sigma))
+
+file_path <- "brms_model2.rds"
+if (file.exists(file_path)) {
+  model2 <- readRDS(file_path)
+} else {
+  model2 <- brm(Life.Ladder ~ 
+                  1 + Log.GDP.per.capita +(Log.GDP.per.capita | Country.name),
+                data = asia, 
+                prior = prior2, iter = 2000, warmup = 500, cores = 4,
+                save_pars = save_pars(all = TRUE))
+  saveRDS(model2, file = file_path)
+}
+model2
+
+# both predictors
+prior3 = c(prior(normal(5, 1), class = b, coef = Social.support), 
+           prior(normal(0.5, 1), class = b, coef = Log.GDP.per.capita))
+
+file_path <- "brms_model3.rds"
+if (file.exists(file_path)) {
+  model3 <- readRDS(file_path)
+} else {
+  model3 <- brm(Life.Ladder ~ 1 + Social.support + Log.GDP.per.capita +(Log.GDP.per.capita | Country.name),
+                data = asia, 
+                prior = prior3, iter = 2000, warmup = 500, cores = 4,
+                save_pars = save_pars(all = TRUE))
+  saveRDS(model3, file = file_path)
+}
+model3
+
+# model comparison
+bayes_factor(model1, model0)
+bayes_factor(model2, model0)
+bayes_factor(model2, model1)
+bayes_factor(model3, model1)
+
+```
+
+## Exercise 5
+
+Interpret the results against the background of the hypothesis.
+
+Model comparison: Model3 performs better than the null model and the models that include only one predictor.
+
+Model diagnostic: Convergent is good. Rhat is 1.00. ESS is larger than 1000. The MCMC plot looks good.
+
+Interpretation: (1) Social support positively predicts Life.Ladder, on average one point increase in social support leads to 3.66 points increase on Life.Ladder, 95% CI: \[2.51, 4.81\]. (2) The overall effect of GDP on Life.Ladder is not clear, 95% CI: \[-1.04, 0.69\]. However, the SD of random slope for GDP is 1.07, indicating that the effect of GDP on happiness depends a lot on countries.
