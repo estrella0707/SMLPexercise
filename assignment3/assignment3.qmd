@@ -1,0 +1,186 @@
+---
+title: "Assignment3"
+format: html
+editor: visual
+---
+
+```{r setup}
+#| message: false
+#| warning: false
+  
+# libraries
+library(ggplot2)
+library(brms)
+library(dplyr)
+```
+
+## Exercise 1: Check for parameter recovery in a linear model using simulated data
+
+Generate some simulated independent and identically distributed data with n = 100 data points as follows:
+
+```{r}
+y <- rnorm(100, mean = 500, sd = 50)
+```
+
+Next, fit a simple linear model with a normal likelihood: $y_{n} \sim Normal(μ, σ)$
+
+Specify the following priors: $μ \sim Uniform(0, 60000)$, $σ \sim Uniform(0, 2000)$
+
+Generate posterior predictive distributions of the parameters and check that the true values of the parameters $µ = 500$, $σ = 50$ are recovered by the model. What this means is that you should check whether these true values lie within the range of the posterior distributions of the two parameters. This is a good sanity check for finding out whether a model can in principle recover the true parameter values correctly.
+
+```{r}
+#| message: false
+#| warning: false
+
+prior <- c(brms::prior(uniform(0, 60000), class = Intercept),
+           # intercept is estimated for the mean income
+           brms::prior(uniform(0, 2000), class = sigma, lb = 0))
+
+sim_dat <- data.frame(y=y)
+
+file_path <- "brms_exercise1.rds"
+if (file.exists(file_path)) {
+  model1 <- readRDS(file_path)
+} else {
+  set.seed(359)
+  model1 <- brm(y ~ 1, data = sim_dat, family = gaussian(),
+                prior = prior, silent = 2, refresh = 0)
+  saveRDS(model1, file = file_path)
+}
+model1
+plot(model1)
+
+posterior.predictions <- posterior_predict(model1)
+
+bayesplot::ppc_dens_overlay(sim_dat$y, 
+                            posterior.predictions[1:500,], trim = T) +
+  theme_light(base_size = 16)
+```
+
+Interpret: Confirm through visual inspect that the true values ($\mu = 500$, $σ = 50$) do fall within the respective posterior distributions shown in the plot.
+
+## Exercise 2: Chocolate Bars
+
+Imagine your favorite chocolate bar is called Nutty Buddy Bites. Because you buy Nutty Buddies so often, you notice that they seem to be lighter than just a few years ago even though the weight on the package hasn’t changed. As a good statistician, you decide to test whether your suspicions are warranted. For the sake of research, you buy 100 Nutty Buddies and a good scale, and you weigh each of the chocolate bars. You save the final data set as nutties.csv.
+
+```{r}
+data <- read.csv("nutties.csv")
+```
+
+(a) The packaging says that the bars are supposed to weigh 50g. Using normal distributions, choose priors that represent your assumptions/beliefs about chocolate bar weight. To think about a reasonable set of priors for $\mu$ and $\sigma$, you should come up with your own subjective assessment about what you think a reasonable range of values can be for $\mu$ and how much variability might happen. There is no correct answer here.
+
+Answer: sample distribution: $y_{n} \sim Normal(μ, σ)$ with priors: $\mu \sim Uniform(45, 50)$, $σ \sim Normal_{+}(0, 1)$
+
+```{r}
+prior <- c(brms::prior(uniform(45, 50), class = Intercept, 
+                       lb = 45, ub = 50),
+           brms::prior(normal(1, 1), class = sigma, lb = 0))
+```
+
+(b) Fit the model with just a few iterations, say 50 iterations (set warmup to the default of 25, and use four chains). Does the model converge?
+
+```{r}
+file_path <- "brms_exercise2_mini.rds"
+if (file.exists(file_path)) {
+  model2 <- readRDS(file_path)
+} else {
+  set.seed(359)
+  model2 <- brm(weight ~ 1, data = data, family = gaussian(),
+                prior = prior, silent = 2, refresh = 0,
+                iter = 50, cores = 4)
+  saveRDS(model2, file = file_path)
+}
+model2
+plot(model2)
+```
+
+Interpretation: The model doesn't converge yet.
+
+(c) Now fit the model properly with sufficient iterations. Visualize the posteriors.
+
+```{r}
+file_path <- "brms_exercise2.rds"
+if (file.exists(file_path)) {
+  model2 <- readRDS(file_path)
+} else {
+  set.seed(359)
+  model2 <- brm(weight ~ 1, data = data, family = gaussian(),
+                prior = prior, silent = 2, refresh = 0)
+  saveRDS(model2, file = file_path)
+}
+model2
+plot(model2)
+
+posterior.predictions <- posterior_predict(model2)
+
+bayesplot::ppc_dens_overlay(data$weight, 
+                            posterior.predictions[1:500,], trim = T) +
+  theme_light(base_size = 16)
+```
+
+Interpretation: The chocolate seems to be indeed lighter than 50g!
+
+## Exercise 3: Other priors
+
+(a) Can you come up with very informative priors that influence the posterior in a noticeable way (use normal distributions for priors, not uniform priors)? Again, there are no correct answers here; you may have to try several different priors before you can noticeably influence the posterior.
+
+Answer: I think strong priors should fulfill two criteria. First, it has to be very certain (e.g., low SD in normal distribution; large pseudo sample size in Beta distribution). Second, it should be very far away from the sample mean and SD for us to observe the insufficient convergence to true mean and SD.
+
+```{r}
+prior <- c(brms::prior(normal(100, 1), class = Intercept, lb = 0,),
+           brms::prior(normal(0.1, 0.1), class = sigma, lb = 0))
+
+file_path <- "brms_exercise3.rds"
+if (file.exists(file_path)) {
+  model3 <- readRDS(file_path)
+} else {
+  set.seed(359)
+  model3 <- brm(weight ~ 1, data = data, family = gaussian(),
+                prior = prior, silent = 2, refresh = 0)
+  saveRDS(model3, file = file_path)
+}
+model3
+plot(model3)
+```
+
+(b) Generate and plot prior predictive distributions based on this prior and plot them.
+
+```{r}
+sim_data <- data.frame(weight = rep(1, 100), trial = 1:100)
+
+file_path <- "brms_exercise3_prior.rds"
+if (file.exists(file_path)) {
+  model3prior <- readRDS(file_path)
+} else {
+  set.seed(359)
+  model3prior <- brm(weight ~ 1, data = sim_data, family = gaussian(),
+                     sample_prior = "only",
+                     prior = prior, silent = 2, refresh = 0)
+  saveRDS(model3prior, file = file_path)
+}
+model3prior
+
+prior.predictions <- posterior_predict(model3prior)
+
+bayesplot::ppc_dens_overlay(data$weight, 
+                            prior.predictions[1:500,], trim = T) +
+  theme_light(base_size = 16)
+```
+
+(c) Generate posterior predictive distributions based on this prior and plot them.
+
+```{r}
+posterior.predictions <- posterior_predict(model3)
+
+bayesplot::ppc_dens_overlay(data$weight, 
+                            posterior.predictions[1:500,], trim = T) +
+  theme_light(base_size = 16)
+```
+
+## Exercise 4: Your visualization set
+
+Generate a script with some useful visualizations for your personal Bayesian workflow. Include Prior and Posterior prediction, visualization of the posterior distributions, and anything else you find useful. Also note which visualizations can be reused on a regular basis and which depend a lot on the model/data at hand.
+
+```{r}
+
+```
